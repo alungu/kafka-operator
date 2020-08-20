@@ -36,15 +36,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func (r *Reconciler) configMap(log logr.Logger) runtime.Object {
+func (r *Reconciler) configMap(log logr.Logger, envoyConfig *v1beta1.EnvoyConfig) runtime.Object {
 	configMap := &corev1.ConfigMap{
-		ObjectMeta: templates.ObjectMeta(envoyVolumeAndConfigName, labelSelector, r.KafkaCluster),
-		Data:       map[string]string{"envoy.yaml": GenerateEnvoyConfig(r.KafkaCluster, log)},
+		ObjectMeta: templates.ObjectMeta(configName(envoyConfig), labelSelector(envoyConfig), r.KafkaCluster),
+		Data:       map[string]string{"envoy.yaml": GenerateEnvoyConfig(r.KafkaCluster, envoyConfig, log)},
 	}
 	return configMap
 }
 
-func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, log logr.Logger) string {
+func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, envoyConfig *v1beta1.EnvoyConfig, log logr.Logger) string {
 	//TODO support multiple external listener by removing [0] (baluchicken)
 	adminConfig := envoybootstrap.Admin{
 		AccessLogPath: "/tmp/admin_access.log",
@@ -64,13 +64,21 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, log logr.Logger) string {
 	var clusters []*envoyapi.Cluster
 
 	for _, brokerId := range util.GetBrokerIdsFromStatus(kc.Status.BrokersState, log) {
+		broker := util.GetBrokerSpecFromId(kc.Spec, int32(brokerId), log)
+		if broker == nil {
+			continue
+		}
+		if envoyConfig.EnvoyPerBrokerGroup && broker.BrokerConfigGroup != envoyConfig.Id {
+			// Since `EnvoyPerBrokerGroup` is enabled, we add only brokers having the same group as the envoy.
+			continue
+		}
 		listeners = append(listeners, &envoyapi.Listener{
 			Address: &envoycore.Address{
 				Address: &envoycore.Address_SocketAddress{
 					SocketAddress: &envoycore.SocketAddress{
 						Address: "0.0.0.0",
 						PortSpecifier: &envoycore.SocketAddress_PortValue{
-							PortValue: uint32(kc.Spec.ListenersConfig.ExternalListeners[0].ExternalStartingPort + int32(brokerId)),
+							PortValue: externalPort(kc, *broker),
 						},
 					},
 				},
@@ -106,7 +114,7 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, log logr.Logger) string {
 						SocketAddress: &envoycore.SocketAddress{
 							Address: fmt.Sprintf("%s-%d.%s-headless.%s.svc.%s", kc.Name, brokerId, kc.Name, kc.Namespace, kc.Spec.GetKubernetesClusterDomain()),
 							PortSpecifier: &envoycore.SocketAddress_PortValue{
-								PortValue: uint32(kc.Spec.ListenersConfig.ExternalListeners[0].ContainerPort),
+								PortValue: containerPort(kc, *broker),
 							},
 						},
 					},
@@ -136,4 +144,30 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, log logr.Logger) string {
 		return ""
 	}
 	return string(marshalledConfig)
+}
+
+func configName(envoyConfig *v1beta1.EnvoyConfig) string {
+	if envoyConfig.Id == envoyGlobal {
+		return envoyVolumeAndConfigName
+	} else {
+		return fmt.Sprintf("%s-%s", envoyVolumeAndConfigName, envoyConfig.Id)
+	}
+}
+
+func firstExternalListener(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) v1beta1.ExternalListenerConfig {
+	// Check for any broker specific External Listeners
+	brokerConfig, err := util.GetBrokerConfig(broker, kc.Spec)
+	if err == nil && brokerConfig.ListenersConfig != nil && brokerConfig.ListenersConfig.ExternalListeners != nil {
+		return brokerConfig.ListenersConfig.ExternalListeners[0]
+	}
+	// Fallback to the global External Listeners
+	return kc.Spec.ListenersConfig.ExternalListeners[0]
+}
+
+func externalPort(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) uint32 {
+	return uint32(firstExternalListener(kc, broker).ExternalStartingPort + broker.Id)
+}
+
+func containerPort(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) uint32 {
+	return uint32(firstExternalListener(kc, broker).ContainerPort)
 }

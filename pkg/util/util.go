@@ -15,6 +15,8 @@
 package util
 
 import (
+	"fmt"
+	"github.com/go-logr/logr"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -22,8 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"emperror.dev/errors"
-	"github.com/go-logr/logr"
+	emperror "emperror.dev/errors"
 	"github.com/imdario/mergo"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -195,6 +196,16 @@ func GetBrokerIdsFromStatus(brokerStatuses map[string]v1beta1.BrokerState, log l
 	return brokerIds
 }
 
+func GetBrokerSpecFromId(clusterSpec v1beta1.KafkaClusterSpec, brokerId int32, log logr.Logger) *v1beta1.Broker {
+	for _, broker := range clusterSpec.Brokers {
+		if broker.Id == brokerId {
+			return &broker
+		}
+	}
+	log.Info(fmt.Sprintf("Could not found brokerId %d in Spec. Broker ID is invalid or broker was removed from the spec", brokerId))
+	return nil
+}
+
 // GetBrokerConfig compose the brokerConfig for a given broker
 func GetBrokerConfig(broker v1beta1.Broker, clusterSpec v1beta1.KafkaClusterSpec) (*v1beta1.BrokerConfig, error) {
 
@@ -207,7 +218,7 @@ func GetBrokerConfig(broker v1beta1.Broker, clusterSpec v1beta1.KafkaClusterSpec
 
 	err := mergo.Merge(bConfig, clusterSpec.BrokerConfigGroups[broker.BrokerConfigGroup], mergo.WithAppendSlice)
 	if err != nil {
-		return nil, errors.WrapIf(err, "could not merge brokerConfig with ConfigGroup")
+		return nil, emperror.WrapIf(err, "could not merge brokerConfig with ConfigGroup")
 	}
 
 	bConfig.StorageConfigs = dedupStorageConfigs(bConfig.StorageConfigs)
@@ -229,6 +240,34 @@ func dedupStorageConfigs(elements []v1beta1.StorageConfig) []v1beta1.StorageConf
 	return result
 }
 
+// GetEnvoyConfig compose the Envoy config from a specific broker config and the global config
+func GetEnvoyConfig(configId string, brokerConfig v1beta1.BrokerConfig, clusterSpec v1beta1.KafkaClusterSpec) *v1beta1.EnvoyConfig {
+	envoyConfig := clusterSpec.EnvoyConfig.DeepCopy()
+
+	if envoyConfig == nil {
+		return nil
+	}
+
+	envoyConfig.Id = configId
+
+	if !clusterSpec.EnvoyConfig.EnvoyPerBrokerGroup {
+		return envoyConfig
+	}
+
+	// Broker config level overrides
+	if brokerConfig.Envoy != nil && brokerConfig.Envoy.Replicas > 0 {
+		envoyConfig.Replicas = brokerConfig.Envoy.Replicas
+	}
+	if brokerConfig.NodeSelector != nil {
+		envoyConfig.NodeSelector = brokerConfig.NodeSelector
+	}
+	if brokerConfig.NodeAffinity != nil {
+		envoyConfig.NodeAffinity = brokerConfig.NodeAffinity
+	}
+
+	return envoyConfig
+}
+
 // GetBrokerImage returns the used broker image
 func GetBrokerImage(brokerConfig *v1beta1.BrokerConfig, clusterImage string) string {
 	if brokerConfig.Image != "" {
@@ -248,4 +287,18 @@ func GetRandomString(length int) (string, error) {
 		b.WriteRune(chars[rand.Intn(len(chars))])
 	}
 	return b.String(), nil
+}
+
+func HasExternalListeners(kafkaClusterSpec v1beta1.KafkaClusterSpec) bool {
+	// Has global External Listener
+	if kafkaClusterSpec.ListenersConfig.ExternalListeners != nil {
+		return true
+	}
+	// No global External Listener. All BrokerGroups must declare at least 1 ExternalListener
+	for _, brokerConfigGroup := range kafkaClusterSpec.BrokerConfigGroups {
+		if brokerConfigGroup.ListenersConfig == nil || brokerConfigGroup.ListenersConfig.ExternalListeners == nil {
+			return false
+		}
+	}
+	return true
 }

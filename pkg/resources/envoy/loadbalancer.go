@@ -32,8 +32,7 @@ import (
 // loadBalancer return a Loadbalancer service for Envoy
 func (r *Reconciler) loadBalancer(log logr.Logger) runtime.Object {
 
-	exposedPorts := getExposedServicePorts(r.KafkaCluster.Spec.ListenersConfig.ExternalListeners,
-		util.GetBrokerIdsFromStatus(r.KafkaCluster.Status.BrokersState, log))
+	exposedPorts := getExposedServicePorts(r.KafkaCluster, log)
 
 	service := &corev1.Service{
 		ObjectMeta: templates.ObjectMetaWithAnnotations(envoyutils.EnvoyServiceName, map[string]string{},
@@ -49,11 +48,21 @@ func (r *Reconciler) loadBalancer(log logr.Logger) runtime.Object {
 	return service
 }
 
-func getExposedServicePorts(extListeners []v1beta1.ExternalListenerConfig, brokersIds []int) []corev1.ServicePort {
+func getExposedServicePorts(kc *v1beta1.KafkaCluster, log logr.Logger) []corev1.ServicePort {
 	var exposedPorts []corev1.ServicePort
 
-	for _, eListener := range extListeners {
-		for _, brokerId := range brokersIds {
+	for _, brokerId := range util.GetBrokerIdsFromStatus(kc.Status.BrokersState, log) {
+		broker := util.GetBrokerSpecFromId(kc.Spec, int32(brokerId), log)
+		if broker == nil {
+			continue
+		}
+
+		brokerConfig, err := util.GetBrokerConfig(*broker, kc.Spec)
+		if err != nil {
+			continue
+		}
+
+		for _, eListener := range brokerConfig.ListenersConfig.ExternalListeners {
 			exposedPorts = append(exposedPorts, corev1.ServicePort{
 				Name:       fmt.Sprintf("broker-%d", brokerId),
 				Port:       eListener.ExternalStartingPort + int32(brokerId),
