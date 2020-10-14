@@ -114,8 +114,8 @@ type BrokerConfig struct {
 	// Applicable only if envoy.dedicatedEnvoyPerBrokerGroup is set to true.
 	Envoy *BrokerGroupEnvoy `json:"envoy,omitempty"`
 	// ListenersConfig defines the broker specific Kafka listener types.
-	// These will override the global ListenersConfig
-	ListenersConfig *ListenersConfig `json:"listenersConfig,omitempty"`
+	// These will override the HostnameOverrides of the global ExternalListener
+	HostnameOverride string `json:"hostnameOverride,omitempty"`
 }
 
 type BrokerGroupEnvoy struct {

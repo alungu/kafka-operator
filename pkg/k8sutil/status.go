@@ -46,7 +46,7 @@ func IsMarkedForDeletion(m metav1.ObjectMeta) bool {
 func UpdateBrokerStatus(c client.Client, brokerIds []string, cluster *v1beta1.KafkaCluster, state interface{}, logger logr.Logger) error {
 	typeMeta := cluster.TypeMeta
 
-	generateBrokerState(brokerIds, cluster, state)
+	generateBrokerState(brokerIds, cluster, state, logger)
 
 	err := c.Status().Update(context.Background(), cluster)
 	if apierrors.IsNotFound(err) {
@@ -64,7 +64,7 @@ func UpdateBrokerStatus(c client.Client, brokerIds []string, cluster *v1beta1.Ka
 			return errors.WrapIf(err, "could not get config for updating status")
 		}
 
-		generateBrokerState(brokerIds, cluster, state)
+		generateBrokerState(brokerIds, cluster, state, logger)
 
 		err = c.Status().Update(context.Background(), cluster)
 		if apierrors.IsNotFound(err) {
@@ -76,11 +76,11 @@ func UpdateBrokerStatus(c client.Client, brokerIds []string, cluster *v1beta1.Ka
 	}
 	// update loses the typeMeta of the config that's used later when setting ownerrefs
 	cluster.TypeMeta = typeMeta
-	logger.Info("Kafka cluster state updated")
+	logger.Info(fmt.Sprintf("Kafka cluster state updated (Update Broker Status). new state: %v+", cluster.Status))
 	return nil
 }
 
-func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCluster, state interface{}) {
+func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCluster, state interface{}, logger logr.Logger) {
 	for _, brokerId := range brokerIds {
 
 		if cluster.Status.BrokersState == nil {
@@ -94,6 +94,8 @@ func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCl
 				cluster.Status.BrokersState = map[string]banzaicloudv1beta1.BrokerState{brokerId: {GracefulActionState: state}}
 			case banzaicloudv1beta1.ConfigurationState:
 				cluster.Status.BrokersState = map[string]banzaicloudv1beta1.BrokerState{brokerId: {ConfigurationState: s}}
+			case banzaicloudv1beta1.ConfigGroupState:
+				cluster.Status.BrokersState = map[string]banzaicloudv1beta1.BrokerState{brokerId: {ConfigGroupState: s}}
 			case map[string]banzaicloudv1beta1.VolumeState:
 				gracefulActionState := banzaicloudv1beta1.GracefulActionState{
 					VolumeStates: s,
@@ -117,6 +119,8 @@ func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCl
 				val.GracefulActionState = state
 			case banzaicloudv1beta1.ConfigurationState:
 				val.ConfigurationState = s
+			case banzaicloudv1beta1.ConfigGroupState:
+				val.ConfigGroupState = s
 			case map[string]banzaicloudv1beta1.VolumeState:
 				if val.GracefulActionState.VolumeStates == nil {
 					val.GracefulActionState.VolumeStates = make(map[string]banzaicloudv1beta1.VolumeState)
@@ -145,6 +149,8 @@ func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCl
 				cluster.Status.BrokersState[brokerId] = banzaicloudv1beta1.BrokerState{GracefulActionState: state}
 			case banzaicloudv1beta1.ConfigurationState:
 				cluster.Status.BrokersState[brokerId] = banzaicloudv1beta1.BrokerState{ConfigurationState: s}
+			case banzaicloudv1beta1.ConfigGroupState:
+				cluster.Status.BrokersState[brokerId] = banzaicloudv1beta1.BrokerState{ConfigGroupState: s}
 			case map[string]banzaicloudv1beta1.VolumeState:
 				gracefulActionState := banzaicloudv1beta1.GracefulActionState{
 					VolumeStates: s,
@@ -158,7 +164,9 @@ func generateBrokerState(brokerIds []string, cluster *banzaicloudv1beta1.KafkaCl
 				cluster.Status.BrokersState[brokerId] = banzaicloudv1beta1.BrokerState{GracefulActionState: gracefulActionState}
 			}
 		}
+		logger.Info(fmt.Sprintf("### new broker state for broker %s : %v+", brokerId, cluster.Status.BrokersState[brokerId]))
 	}
+	logger.Info(fmt.Sprintf("### new global state : %v+", cluster.Status))
 }
 
 // DeleteStatus deletes the given broker state from the CR
@@ -249,7 +257,7 @@ func UpdateCRStatus(c client.Client, cluster *v1beta1.KafkaCluster, state interf
 	}
 	// update loses the typeMeta of the config that's used later when setting ownerrefs
 	cluster.TypeMeta = typeMeta
-	logger.Info("CR status updated", "status", state)
+	logger.Info(fmt.Sprintf("Kafka cluster state updated (Update CR Status). new state: %v+", cluster.Status))
 	return nil
 }
 
@@ -288,6 +296,6 @@ func UpdateRollingUpgradeState(c client.Client, cluster *v1beta1.KafkaCluster, t
 	}
 	// update loses the typeMeta of the config that's used later when setting ownerrefs
 	cluster.TypeMeta = typeMeta
-	logger.Info("Rolling upgrade status updated", "status", timeStamp)
+	logger.Info(fmt.Sprintf("Kafka cluster state updated (Rolling Upgrade). new state: %v+", cluster.Status))
 	return nil
 }

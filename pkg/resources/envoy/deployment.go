@@ -108,12 +108,7 @@ func getExposedContainerPorts(envoyConfig *v1beta1.EnvoyConfig, extListeners []v
 
 	for _, eListener := range extListeners {
 		for _, brokerId := range util.GetBrokerIdsFromStatus(kc.Status.BrokersState, log) {
-			broker := util.GetBrokerSpecFromId(kc.Spec, int32(brokerId), log)
-			if broker == nil {
-				continue
-			}
-
-			if envoyConfig.Id == envoyGlobal || envoyConfig.Id == broker.BrokerConfigGroup {
+			if envoyConfig.Id == envoyGlobal || envoyConfig.Id == util.GetBrokerConfigGroupFromStatus(kc.Status.BrokersState, brokerId, log) {
 				exposedPorts = append(exposedPorts, corev1.ContainerPort{
 					Name:          fmt.Sprintf("broker-%d", brokerId),
 					ContainerPort: eListener.ExternalStartingPort + int32(brokerId),

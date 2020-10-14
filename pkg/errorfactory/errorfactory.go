@@ -70,9 +70,6 @@ type CruiseControlTaskTimeout struct{ error }
 // CruiseControlTaskFailure states that CC task was not found (CC restart?) or failed
 type CruiseControlTaskFailure struct{ error }
 
-// KafkaConfigError stats that the Kafka configuration is invalid
-type KafkaConfigError struct{ error }
-
 // New creates a new error factory error
 func New(t interface{}, err error, msg string, wrapArgs ...interface{}) error {
 	wrapped := errors.WrapIfWithDetails(err, msg, wrapArgs...)
@@ -113,8 +110,6 @@ func New(t interface{}, err error, msg string, wrapArgs ...interface{}) error {
 		return CruiseControlTaskTimeout{wrapped}
 	case CruiseControlTaskFailure:
 		return CruiseControlTaskFailure{wrapped}
-	case KafkaConfigError:
-		return KafkaConfigError{wrapped}
 	}
 	return wrapped
 }

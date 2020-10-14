@@ -26,7 +26,6 @@ import (
 	"github.com/banzaicloud/kafka-operator/api/v1beta1"
 	"github.com/banzaicloud/kafka-operator/pkg/resources/templates"
 	"github.com/banzaicloud/kafka-operator/pkg/util"
-	"github.com/banzaicloud/kafka-operator/pkg/util/kafka"
 	zookeeperutils "github.com/banzaicloud/kafka-operator/pkg/util/zookeeper"
 	"github.com/go-logr/logr"
 	"github.com/imdario/mergo"
@@ -78,17 +77,16 @@ super.users={{ .SuperUsers }}
 
 func (r *Reconciler) getConfigString(bConfig *v1beta1.BrokerConfig, id int32, serverPass, clientPass string, superUsers []string, log logr.Logger) string {
 	var out bytes.Buffer
-	var brokerListenersConfig = kafka.MergeListenerConfigs(&r.KafkaCluster.Spec.ListenersConfig, bConfig.ListenersConfig)
 	t := template.Must(template.New("bConfig-config").Parse(kafkaConfigTemplate))
 	if err := t.Execute(&out, map[string]interface{}{
 		"KafkaCluster":                       r.KafkaCluster,
 		"Id":                                 id,
-		"ListenerConfig":                     generateListenerSpecificConfig(brokerListenersConfig, log),
-		"SSLEnabledForInternalCommunication": brokerListenersConfig.SSLSecrets != nil && util.IsSSLEnabledForInternalCommunication(r.KafkaCluster.Spec.ListenersConfig.InternalListeners),
+		"ListenerConfig":                     generateListenerSpecificConfig(&r.KafkaCluster.Spec.ListenersConfig, log),
+		"SSLEnabledForInternalCommunication": r.KafkaCluster.Spec.ListenersConfig.SSLSecrets != nil && util.IsSSLEnabledForInternalCommunication(r.KafkaCluster.Spec.ListenersConfig.InternalListeners),
 		"ZookeeperConnectString":             zookeeperutils.PrepareConnectionAddress(r.KafkaCluster.Spec.ZKAddresses, r.KafkaCluster.Spec.GetZkPath()),
-		"CruiseControlBootstrapServers":      getInternalListener(brokerListenersConfig.InternalListeners, id, r.KafkaCluster.Spec.GetKubernetesClusterDomain(), r.KafkaCluster.Namespace, r.KafkaCluster.Name, r.KafkaCluster.Spec.HeadlessServiceEnabled),
+		"CruiseControlBootstrapServers":      getInternalListener(r.KafkaCluster.Spec.ListenersConfig.InternalListeners, id, r.KafkaCluster.Spec.GetKubernetesClusterDomain(), r.KafkaCluster.Namespace, r.KafkaCluster.Name, r.KafkaCluster.Spec.HeadlessServiceEnabled),
 		"StorageConfig":                      generateStorageConfig(bConfig.StorageConfigs),
-		"AdvertisedListenersConfig":          generateAdvertisedListenerConfig(id, brokerListenersConfig, r.KafkaCluster.Spec.GetKubernetesClusterDomain(), r.KafkaCluster.Namespace, r.KafkaCluster.Name, r.KafkaCluster.Spec.HeadlessServiceEnabled),
+		"AdvertisedListenersConfig":          generateAdvertisedListenerConfig(id, &r.KafkaCluster.Spec.ListenersConfig, bConfig.HostnameOverride, r.KafkaCluster.Spec.GetKubernetesClusterDomain(), r.KafkaCluster.Namespace, r.KafkaCluster.Name, r.KafkaCluster.Spec.HeadlessServiceEnabled),
 		"SuperUsers":                         strings.Join(generateSuperUsers(superUsers), ";"),
 		"ServerKeystorePath":                 serverKeystorePath,
 		"ClientKeystorePath":                 clientKeystorePath,
@@ -96,7 +94,7 @@ func (r *Reconciler) getConfigString(bConfig *v1beta1.BrokerConfig, id int32, se
 		"TrustStoreFile":                     v1alpha1.TLSJKSTrustStore,
 		"ServerKeystorePassword":             serverPass,
 		"ClientKeystorePassword":             clientPass,
-		"ControlPlaneListener":               generateControlPlaneListener(brokerListenersConfig.InternalListeners),
+		"ControlPlaneListener":               generateControlPlaneListener(r.KafkaCluster.Spec.ListenersConfig.InternalListeners),
 	}); err != nil {
 		log.Error(err, "error occurred during parsing the config template")
 	}
@@ -129,11 +127,11 @@ func (r *Reconciler) configMap(id int32, brokerConfig *v1beta1.BrokerConfig, ser
 	return brokerConf
 }
 
-func generateAdvertisedListenerConfig(id int32, l *v1beta1.ListenersConfig, domain, namespace, crName string, headlessServiceEnabled bool) string {
+func generateAdvertisedListenerConfig(id int32, l *v1beta1.ListenersConfig, brokerHostname, domain, namespace, crName string, headlessServiceEnabled bool) string {
 	advertisedListenerConfig := []string{}
 	for _, eListener := range l.ExternalListeners {
 		advertisedListenerConfig = append(advertisedListenerConfig,
-			fmt.Sprintf("%s://%s:%d", strings.ToUpper(eListener.Name), eListener.HostnameOverride, eListener.ExternalStartingPort+id))
+			fmt.Sprintf("%s://%s:%d", strings.ToUpper(eListener.Name), brokerHostname, eListener.ExternalStartingPort+id))
 	}
 	for _, iListener := range l.InternalListeners {
 		if headlessServiceEnabled {

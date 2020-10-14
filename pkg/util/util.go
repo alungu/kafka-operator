@@ -196,6 +196,14 @@ func GetBrokerIdsFromStatus(brokerStatuses map[string]v1beta1.BrokerState, log l
 	return brokerIds
 }
 
+func GetBrokerConfigGroupFromStatus(brokerStatuses map[string]v1beta1.BrokerState, brokerId int, log logr.Logger) string {
+	stringId := strconv.Itoa(brokerId)
+	if brokerStatus, ok := brokerStatuses[stringId]; ok {
+		return string(brokerStatus.ConfigGroupState)
+	}
+	return ""
+}
+
 func GetBrokerSpecFromId(clusterSpec v1beta1.KafkaClusterSpec, brokerId int32, log logr.Logger) *v1beta1.Broker {
 	for _, broker := range clusterSpec.Brokers {
 		if broker.Id == brokerId {
@@ -287,18 +295,4 @@ func GetRandomString(length int) (string, error) {
 		b.WriteRune(chars[rand.Intn(len(chars))])
 	}
 	return b.String(), nil
-}
-
-func HasExternalListeners(kafkaClusterSpec v1beta1.KafkaClusterSpec) bool {
-	// Has global External Listener
-	if kafkaClusterSpec.ListenersConfig.ExternalListeners != nil {
-		return true
-	}
-	// No global External Listener. All BrokerGroups must declare at least 1 ExternalListener
-	for _, brokerConfigGroup := range kafkaClusterSpec.BrokerConfigGroups {
-		if brokerConfigGroup.ListenersConfig == nil || brokerConfigGroup.ListenersConfig.ExternalListeners == nil {
-			return false
-		}
-	}
-	return true
 }

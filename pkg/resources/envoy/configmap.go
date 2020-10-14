@@ -64,11 +64,7 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, envoyConfig *v1beta1.EnvoyCon
 	var clusters []*envoyapi.Cluster
 
 	for _, brokerId := range util.GetBrokerIdsFromStatus(kc.Status.BrokersState, log) {
-		broker := util.GetBrokerSpecFromId(kc.Spec, int32(brokerId), log)
-		if broker == nil {
-			continue
-		}
-		if envoyConfig.EnvoyPerBrokerGroup && broker.BrokerConfigGroup != envoyConfig.Id {
+		if envoyConfig.EnvoyPerBrokerGroup && envoyConfig.Id != util.GetBrokerConfigGroupFromStatus(kc.Status.BrokersState, brokerId, log) {
 			// Since `EnvoyPerBrokerGroup` is enabled, we add only brokers having the same group as the envoy.
 			continue
 		}
@@ -78,7 +74,7 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, envoyConfig *v1beta1.EnvoyCon
 					SocketAddress: &envoycore.SocketAddress{
 						Address: "0.0.0.0",
 						PortSpecifier: &envoycore.SocketAddress_PortValue{
-							PortValue: externalPort(kc, *broker),
+							PortValue: uint32(kc.Spec.ListenersConfig.ExternalListeners[0].ExternalStartingPort + int32(brokerId)),
 						},
 					},
 				},
@@ -114,7 +110,7 @@ func GenerateEnvoyConfig(kc *v1beta1.KafkaCluster, envoyConfig *v1beta1.EnvoyCon
 						SocketAddress: &envoycore.SocketAddress{
 							Address: fmt.Sprintf("%s-%d.%s-headless.%s.svc.%s", kc.Name, brokerId, kc.Name, kc.Namespace, kc.Spec.GetKubernetesClusterDomain()),
 							PortSpecifier: &envoycore.SocketAddress_PortValue{
-								PortValue: containerPort(kc, *broker),
+								PortValue: uint32(kc.Spec.ListenersConfig.ExternalListeners[0].ContainerPort),
 							},
 						},
 					},
@@ -152,22 +148,4 @@ func configName(envoyConfig *v1beta1.EnvoyConfig) string {
 	} else {
 		return fmt.Sprintf("%s-%s", envoyVolumeAndConfigName, envoyConfig.Id)
 	}
-}
-
-func firstExternalListener(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) v1beta1.ExternalListenerConfig {
-	// Check for any broker specific External Listeners
-	brokerConfig, err := util.GetBrokerConfig(broker, kc.Spec)
-	if err == nil && brokerConfig.ListenersConfig != nil && brokerConfig.ListenersConfig.ExternalListeners != nil {
-		return brokerConfig.ListenersConfig.ExternalListeners[0]
-	}
-	// Fallback to the global External Listeners
-	return kc.Spec.ListenersConfig.ExternalListeners[0]
-}
-
-func externalPort(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) uint32 {
-	return uint32(firstExternalListener(kc, broker).ExternalStartingPort + broker.Id)
-}
-
-func containerPort(kc *v1beta1.KafkaCluster, broker v1beta1.Broker) uint32 {
-	return uint32(firstExternalListener(kc, broker).ContainerPort)
 }

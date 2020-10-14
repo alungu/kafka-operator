@@ -94,6 +94,11 @@ spec:
                         minimum: 1
                         type: integer
                     type: object
+                  hostnameOverride:
+                    description: ListenersConfig defines the broker specific Kafka
+                      listener types. These will override the HostnameOverrides of
+                      the global ExternalListener
+                    type: string
                   image:
                     type: string
                   imagePullSecrets:
@@ -111,105 +116,6 @@ spec:
                     type: string
                   kafkaJvmPerfOpts:
                     type: string
-                  listenersConfig:
-                    description: ListenersConfig defines the broker specific Kafka
-                      listener types. These will override the global ListenersConfig
-                    properties:
-                      externalListeners:
-                        items:
-                          description: ExternalListenerConfig defines the external
-                            listener config for Kafka
-                          properties:
-                            containerPort:
-                              format: int32
-                              type: integer
-                            externalStartingPort:
-                              description: The broker port is computed as the sum
-                                of the externalStartingPort and the broker id. For
-                                consistence, it is recommended that externalStartingPort
-                                has the same value across all the brokerConfigGroups.
-                              format: int32
-                              type: integer
-                            hostnameOverride:
-                              type: string
-                            name:
-                              type: string
-                            serviceAnnotations:
-                              additionalProperties:
-                                type: string
-                              type: object
-                            type:
-                              type: string
-                          required:
-                          - containerPort
-                          - externalStartingPort
-                          - name
-                          - type
-                          type: object
-                        type: array
-                      internalListeners:
-                        items:
-                          description: InternalListenerConfig defines the internal
-                            listener config for Kafka
-                          properties:
-                            containerPort:
-                              format: int32
-                              type: integer
-                            name:
-                              type: string
-                            type:
-                              type: string
-                            usedForControllerCommunication:
-                              type: boolean
-                            usedForInnerBrokerCommunication:
-                              type: boolean
-                          required:
-                          - containerPort
-                          - name
-                          - type
-                          - usedForInnerBrokerCommunication
-                          type: object
-                        type: array
-                      serviceAnnotations:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      sslSecrets:
-                        description: SSLSecrets defines the Kafka SSL secrets
-                        properties:
-                          create:
-                            type: boolean
-                          issuerRef:
-                            description: ObjectReference is a reference to an object
-                              with a given name, kind and group.
-                            properties:
-                              group:
-                                type: string
-                              kind:
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          jksPasswordName:
-                            type: string
-                          pkiBackend:
-                            description: PKIBackend represents an interface implementing
-                              the PKIManager
-                            enum:
-                            - cert-manager
-                            - vault
-                            type: string
-                          tlsSecretName:
-                            type: string
-                        required:
-                        - jksPasswordName
-                        - tlsSecretName
-                        type: object
-                    required:
-                    - internalListeners
-                    type: object
                   log4jConfig:
                     description: Override for the default log4j configuration
                     type: string
@@ -664,6 +570,11 @@ spec:
                             minimum: 1
                             type: integer
                         type: object
+                      hostnameOverride:
+                        description: ListenersConfig defines the broker specific Kafka
+                          listener types. These will override the HostnameOverrides
+                          of the global ExternalListener
+                        type: string
                       image:
                         type: string
                       imagePullSecrets:
@@ -682,105 +593,6 @@ spec:
                         type: string
                       kafkaJvmPerfOpts:
                         type: string
-                      listenersConfig:
-                        description: ListenersConfig defines the broker specific Kafka
-                          listener types. These will override the global ListenersConfig
-                        properties:
-                          externalListeners:
-                            items:
-                              description: ExternalListenerConfig defines the external
-                                listener config for Kafka
-                              properties:
-                                containerPort:
-                                  format: int32
-                                  type: integer
-                                externalStartingPort:
-                                  description: The broker port is computed as the
-                                    sum of the externalStartingPort and the broker
-                                    id. For consistence, it is recommended that externalStartingPort
-                                    has the same value across all the brokerConfigGroups.
-                                  format: int32
-                                  type: integer
-                                hostnameOverride:
-                                  type: string
-                                name:
-                                  type: string
-                                serviceAnnotations:
-                                  additionalProperties:
-                                    type: string
-                                  type: object
-                                type:
-                                  type: string
-                              required:
-                              - containerPort
-                              - externalStartingPort
-                              - name
-                              - type
-                              type: object
-                            type: array
-                          internalListeners:
-                            items:
-                              description: InternalListenerConfig defines the internal
-                                listener config for Kafka
-                              properties:
-                                containerPort:
-                                  format: int32
-                                  type: integer
-                                name:
-                                  type: string
-                                type:
-                                  type: string
-                                usedForControllerCommunication:
-                                  type: boolean
-                                usedForInnerBrokerCommunication:
-                                  type: boolean
-                              required:
-                              - containerPort
-                              - name
-                              - type
-                              - usedForInnerBrokerCommunication
-                              type: object
-                            type: array
-                          serviceAnnotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          sslSecrets:
-                            description: SSLSecrets defines the Kafka SSL secrets
-                            properties:
-                              create:
-                                type: boolean
-                              issuerRef:
-                                description: ObjectReference is a reference to an
-                                  object with a given name, kind and group.
-                                properties:
-                                  group:
-                                    type: string
-                                  kind:
-                                    type: string
-                                  name:
-                                    type: string
-                                required:
-                                - name
-                                type: object
-                              jksPasswordName:
-                                type: string
-                              pkiBackend:
-                                description: PKIBackend represents an interface implementing
-                                  the PKIManager
-                                enum:
-                                - cert-manager
-                                - vault
-                                type: string
-                              tlsSecretName:
-                                type: string
-                            required:
-                            - jksPasswordName
-                            - tlsSecretName
-                            type: object
-                        required:
-                        - internalListeners
-                        type: object
                       log4jConfig:
                         description: Override for the default log4j configuration
                         type: string
@@ -4487,6 +4299,10 @@ spec:
               additionalProperties:
                 description: BrokerState holds information about broker state
                 properties:
+                  configGroupState:
+                    description: ConfigurationGroupState holds info about the broker's
+                      config group - the config group ID
+                    type: string
                   configurationState:
                     description: ConfigurationState holds info about the config
                     type: string
@@ -4544,6 +4360,7 @@ spec:
                       status
                     type: string
                 required:
+                - configGroupState
                 - configurationState
                 - gracefulActionState
                 - rackAwarenessState

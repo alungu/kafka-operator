@@ -88,7 +88,7 @@ func (r *Reconciler) Reconcile(log logr.Logger) error {
 	log = log.WithValues("component", componentName)
 
 	log.V(1).Info("Reconciling")
-	if r.KafkaCluster.Spec.GetIngressController() == envoyutils.IngressControllerName && util.HasExternalListeners(r.KafkaCluster.Spec) {
+	if r.KafkaCluster.Spec.GetIngressController() == envoyutils.IngressControllerName {
 		var objectsMarkedForDelete []runtime.Object
 		var objectsMarkedForReconcile []runtime.Object
 		// We must address the case in which the `EnvoyPerBrokerGroup` is updated on an existing cluster.
