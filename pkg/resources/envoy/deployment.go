@@ -82,7 +82,7 @@ func getPodSpec(log logr.Logger, envoyConfig *v1beta1.EnvoyConfig, kafkaCluster 
 		ServiceAccountName: kafkaCluster.Spec.EnvoyConfig.GetServiceAccount(),
 		ImagePullSecrets:   kafkaCluster.Spec.EnvoyConfig.GetImagePullSecrets(),
 		Tolerations:        kafkaCluster.Spec.EnvoyConfig.GetTolerations(),
-		NodeSelector:       kafkaCluster.Spec.EnvoyConfig.GetNodeSelector(),
+		NodeSelector:       envoyConfig.GetNodeSelector(),
 		Containers: []corev1.Container{
 			{
 				Name:  "envoy",
